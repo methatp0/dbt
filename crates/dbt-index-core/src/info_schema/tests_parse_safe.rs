@@ -317,7 +317,7 @@ fn raw_code_is_exposed_only_where_a_node_has_sql() {
         "analyses",
         "hooks",
         "functions",
-   ] {
+    ] {
         assert!(
             exposes(view),
             "{view} nodes carry their SQL, so a rule about that SQL must be writable",
