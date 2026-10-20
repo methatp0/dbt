@@ -657,13 +657,12 @@ pub fn extract_json_field_raw<'a>(json: &'a str, key: &str) -> Option<&'a str> {
 ///
 /// Model payloads are multi-KB — mostly `raw_code`, `compiled_code` and the
 /// per-column documentation — so rather than pay for a full `simd_json` parse of
-/// the whole thing this keeps two fields and drops the rest.
+/// the whole thing this keeps the fields the row builder needs and drops the rest.
 ///
-/// Dropping `raw_code` from `__common_attr__` keeps the trim's point (model
-/// payloads are multi-KB mostly because of source and compiled SQL) while
-/// leaving `patch_path`, `language`, `checksum` and `meta` available to the
-/// row builder. Those used to be dropped wholesale with `__common_attr__`,
-/// so every model published them as NULL.
+/// `raw_code` is extracted separately from `__common_attr__` and kept as a
+/// top-level field for the node row. This avoids parsing the rest of the payload
+/// while preserving the SQL in the dedicated `nodes.raw_code` column. The
+/// remaining common attributes stay trimmed to keep the payload compact.
 ///
 /// `config` is kept as raw JSON text, since only some of the builders parse it.
 /// `__model_attr__` is kept whole and parsed: `DbtModelAttr` is a fixed, small
@@ -685,12 +684,16 @@ pub fn trim_model_payload(raw: Option<&str>) -> Value {
     {
         obj.insert("__model_attr__".to_string(), ma);
     }
-    if let Some(Value::Object(mut common)) = raw
-        .and_then(|r| extract_json_field_raw(r, "__common_attr__"))
-        .and_then(|s| serde_json::from_str::<Value>(s).ok())
-    {
-        common.remove("raw_code");
-        obj.insert("__common_attr__".to_string(), Value::Object(common));
+    if let Some(common_raw) = raw.and_then(|r| extract_json_field_raw(r, "__common_attr__")) {
+        if let Some(raw_code) = extract_json_field_raw(common_raw, "raw_code")
+            .and_then(|s| serde_json::from_str::<String>(s).ok())
+        {
+            obj.insert("raw_code".to_string(), Value::String(raw_code));
+        }
+        if let Some(Value::Object(mut common)) = serde_json::from_str::<Value>(common_raw).ok() {
+            common.remove("raw_code");
+            obj.insert("__common_attr__".to_string(), Value::Object(common));
+        }
     }
     Value::Object(obj)
 }
@@ -3951,9 +3954,9 @@ mod tests {
         assert!(ma.get("primary_key").is_some());
         assert!(ma.get("time_spine").is_some());
         // Whole-object, so an attribute no builder reads yet is there when one
-        // starts to. `raw_code` is what the trim is for, and is gone.
+        // starts to. Source SQL is retained separately for the dedicated node column.
         assert!(ma.get("other").is_some());
-        assert!(trimmed.get("raw_code").is_none());
+        assert_eq!(trimmed.get("raw_code").and_then(|v| v.as_str()), Some("select 1"));
     }
 
     #[test]
@@ -3969,6 +3972,7 @@ mod tests {
         );
         assert!(common.get("meta").is_some());
         assert!(common.get("raw_code").is_none());
+        assert_eq!(trimmed.get("raw_code").and_then(|v| v.as_str()), Some("select 1"));
     }
 
     #[test]
