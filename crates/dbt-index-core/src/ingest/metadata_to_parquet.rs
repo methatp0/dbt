@@ -3962,7 +3962,10 @@ mod tests {
         // Whole-object, so an attribute no builder reads yet is there when one
         // starts to. Source SQL is retained separately for the dedicated node column.
         assert!(ma.get("other").is_some());
-        assert_eq!(trimmed.get("raw_code").and_then(|v| v.as_str()), Some("select 1"));
+        assert_eq!(
+            trimmed.get("raw_code").and_then(|v| v.as_str()),
+            Some("select 1")
+        );
     }
 
     #[test]
