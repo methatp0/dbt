@@ -310,7 +310,14 @@ fn raw_code_is_exposed_only_where_a_node_has_sql() {
             .contains(&"raw_code")
     };
 
-    for view in ["models", "snapshots", "checks", "analyses", "hooks", "functions"] {
+    for view in [
+        "models",
+        "snapshots",
+        "checks",
+        "analyses",
+        "hooks",
+        "functions",
+   ] {
         assert!(
             exposes(view),
             "{view} nodes carry their SQL, so a rule about that SQL must be writable",
