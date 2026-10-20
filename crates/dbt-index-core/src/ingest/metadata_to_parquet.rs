@@ -684,16 +684,22 @@ pub fn trim_model_payload(raw: Option<&str>) -> Value {
     {
         obj.insert("__model_attr__".to_string(), ma);
     }
-    if let Some(common_raw) = raw.and_then(|r| extract_json_field_raw(r, "__common_attr__")) {
-        if let Some(raw_code) = extract_json_field_raw(common_raw, "raw_code")
-            .and_then(|s| serde_json::from_str::<String>(s).ok())
-        {
-            obj.insert("raw_code".to_string(), Value::String(raw_code));
-        }
-        if let Some(Value::Object(mut common)) = serde_json::from_str::<Value>(common_raw).ok() {
-            common.remove("raw_code");
-            obj.insert("__common_attr__".to_string(), Value::Object(common));
-        }
+    let raw_code = raw
+        .and_then(|r| {
+            extract_json_field_raw(r, "__common_attr__")
+                .and_then(|common| extract_json_field_raw(common, "raw_code"))
+                .or_else(|| extract_json_field_raw(r, "raw_code"))
+        })
+        .and_then(|s| serde_json::from_str::<String>(s).ok());
+    if let Some(raw_code) = raw_code {
+        obj.insert("raw_code".to_string(), Value::String(raw_code));
+    }
+    if let Some(Value::Object(mut common)) = raw
+        .and_then(|r| extract_json_field_raw(r, "__common_attr__"))
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    {
+        common.remove("raw_code");
+        obj.insert("__common_attr__".to_string(), Value::Object(common));
     }
     Value::Object(obj)
 }
