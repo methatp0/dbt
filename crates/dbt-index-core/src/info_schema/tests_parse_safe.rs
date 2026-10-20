@@ -28,8 +28,7 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
             "extra_ctes",
             "search_text",
             "raw_code_hash",
-            // `raw_code` is deliberately not listed: it is dead for *model* rows only, which a
-            // table-keyed list cannot express. See `raw_code_is_exposed_only_where_a_node_has_sql`.
+            // `raw_code` is populated for model rows from the model's source SQL.
             "grain",
             "grain_declared",
             "grain_tested",
@@ -296,13 +295,10 @@ fn every_view_mirrors_an_information_schema_table() {
 /// `raw_code` is per resource type, not per table, so it cannot be settled by
 /// [`DEAD_AT_PARSE`] or by `node_cols!`.
 ///
-/// `trim_model_payload` drops it from model payloads only, so it is NULL for `models` and
-/// real SQL for every other node type that has any. Seeds and sources have no SQL at all
-/// and arrive as an empty string, which reads to a check exactly like the NULL does -- a
-/// `like` never matches, so the rule passes -- so they do not carry it either.
-///
-/// Measured per type against the index: model NULL; snapshot, check, analysis, operation
-/// and function populated; seed and source empty.
+/// Models, snapshots, checks, analyses, hooks and functions expose SQL-bearing node rows.
+/// Seeds and sources have no SQL at all and arrive as an empty string, which reads to a
+/// check exactly like NULL does -- a `like` never matches, so the rule passes -- so they do
+/// not carry it either.
 #[test]
 fn raw_code_is_exposed_only_where_a_node_has_sql() {
     let exposes = |name: &str| {
