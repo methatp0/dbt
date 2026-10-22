@@ -3981,7 +3981,10 @@ mod tests {
         );
         assert!(common.get("meta").is_some());
         assert!(common.get("raw_code").is_none());
-        assert_eq!(trimmed.get("raw_code").and_then(|v| v.as_str()), Some("select 1"));
+        assert_eq!(
+            trimmed.get("raw_code").and_then(|v| v.as_str()),
+            Some("select 1")
+        );
     }
 
     #[test]
