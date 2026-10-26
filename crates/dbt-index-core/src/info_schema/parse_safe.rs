@@ -115,17 +115,9 @@ pub struct ParseSafeView {
 /// which is here). `file_path` and `checksum` are absent because the information schema
 /// does not have them.
 ///
-/// `raw_code` is not here either, and it is the one column left out by *resource type* rather
-/// than by phase, which is why it cannot live in this macro at all: the views that carry it name
-/// it themselves.
-///
-/// It was excluded from `models` because the index left it NULL there — `trim_model_payload`
-/// drops it from `__common_attr__` for models only, their payloads being multi-KB mostly
-/// because of SQL — while every other node type with SQL kept it. Reading the epoch payloads
-/// removes that asymmetry: `raw_code` is populated for models there, which is why the
-/// information schema has always published it, and a rule developed in `dbt show --info` no
-/// longer returns rows there and nothing as a check. Offering it on `models` is a widening of
-/// the check surface rather than part of the port, so it is still left out here.
+/// `raw_code` is left out of the common macro because only resource types with SQL expose it;
+/// the views that carry it name it themselves. Model ingestion now extracts source SQL into the
+/// dedicated index column without retaining the full payload, so models can expose it too.
 macro_rules! node_cols {
     ($($extra:expr),* $(,)?) => {
         &[
@@ -234,7 +226,7 @@ pub const VIEWS: &[ParseSafeView] = &[
         vocabulary: "models",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["model"]),
-        cols: node_cols!["constraints"],
+        cols: node_cols!["raw_code", "constraints"],
     },
     ParseSafeView {
         name: "seeds",

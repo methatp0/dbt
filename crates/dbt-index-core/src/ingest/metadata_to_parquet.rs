@@ -678,11 +678,9 @@ pub fn extract_json_field_raw<'a>(json: &'a str, key: &str) -> Option<&'a str> {
 /// per-column documentation — so rather than pay for a full `simd_json` parse of
 /// the whole thing this keeps two fields and drops the rest.
 ///
-/// Dropping `raw_code` from `__common_attr__` keeps the trim's point (model
-/// payloads are multi-KB mostly because of source and compiled SQL) while
-/// leaving `patch_path`, `language`, `checksum` and `meta` available to the
-/// row builder. Those used to be dropped wholesale with `__common_attr__`,
-/// so every model published them as NULL.
+/// Source SQL is extracted separately into a top-level field so the row builder
+/// can populate `nodes.raw_code` without retaining it inside `__common_attr__`.
+/// The remaining common attributes stay trimmed to keep the payload compact.
 ///
 /// `config` is kept as raw JSON text, since only some of the builders parse it.
 /// `__model_attr__` is kept whole and parsed: `DbtModelAttr` is a fixed, small
@@ -703,6 +701,16 @@ pub fn trim_model_payload(raw: Option<&str>) -> Value {
         .and_then(|s| serde_json::from_str::<Value>(s).ok())
     {
         obj.insert("__model_attr__".to_string(), ma);
+    }
+    let raw_code = raw
+        .and_then(|r| {
+            extract_json_field_raw(r, "__common_attr__")
+                .and_then(|common| extract_json_field_raw(common, "raw_code"))
+                .or_else(|| extract_json_field_raw(r, "raw_code"))
+        })
+        .and_then(|s| serde_json::from_str::<String>(s).ok());
+    if let Some(raw_code) = raw_code {
+        obj.insert("raw_code".to_string(), Value::String(raw_code));
     }
     if let Some(Value::Object(mut common)) = raw
         .and_then(|r| extract_json_field_raw(r, "__common_attr__"))
@@ -4079,9 +4087,12 @@ mod tests {
         assert!(ma.get("primary_key").is_some());
         assert!(ma.get("time_spine").is_some());
         // Whole-object, so an attribute no builder reads yet is there when one
-        // starts to. `raw_code` is what the trim is for, and is gone.
+        // starts to. Source SQL is retained separately for the dedicated node column.
         assert!(ma.get("other").is_some());
-        assert!(trimmed.get("raw_code").is_none());
+        assert_eq!(
+            trimmed.get("raw_code").and_then(|v| v.as_str()),
+            Some("select 1")
+        );
     }
 
     #[test]
@@ -4097,6 +4108,10 @@ mod tests {
         );
         assert!(common.get("meta").is_some());
         assert!(common.get("raw_code").is_none());
+        assert_eq!(
+            trimmed.get("raw_code").and_then(|v| v.as_str()),
+            Some("select 1")
+        );
     }
 
     #[test]

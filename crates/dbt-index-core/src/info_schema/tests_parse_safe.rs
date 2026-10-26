@@ -214,7 +214,8 @@ fn projected_view_sql() {
             r#"t."version" AS "version", t."latest_version" AS "latest_version", "#,
             r#"t."deprecation_date" AS "deprecation_date", t."primary_key" AS "primary_key", "#,
             r#"t."patch_path" AS "properties_yml_file_path", t."tags" AS "tags", "#,
-            r#"t."meta" AS "meta", t."node_constraints" AS "constraints", "#,
+            r#"t."meta" AS "meta", t."raw_code" AS "raw_code", "#,
+            r#"t."node_constraints" AS "constraints", "#,
             r#"t."ingested_at" AS "ingested_at" "#,
             r#"FROM dbt_internal."nodes" AS t WHERE t."resource_type" IN ('model')"#,
         ),
@@ -290,8 +291,8 @@ fn every_view_mirrors_an_information_schema_table() {
 /// and arrive as an empty string, which reads to a check exactly like the NULL does -- a
 /// `like` never matches, so the rule passes -- so they do not carry it either.
 ///
-/// Measured per type against the index: model NULL; snapshot, check, analysis, operation
-/// and function populated; seed and source empty.
+/// Measured per type against the index: model, snapshot, check, analysis, operation and
+/// function populated; seed and source empty.
 #[test]
 fn raw_code_is_exposed_only_where_a_node_has_sql() {
     let exposes = |name: &str| {
@@ -303,13 +304,13 @@ fn raw_code_is_exposed_only_where_a_node_has_sql() {
             .contains(&"raw_code")
     };
 
-    for view in ["snapshots", "checks", "analyses", "hooks", "functions"] {
+    for view in ["models", "snapshots", "checks", "analyses", "hooks", "functions"] {
         assert!(
             exposes(view),
             "{view} nodes carry their SQL, so a rule about that SQL must be writable",
         );
     }
-    for view in ["models", "seeds", "sources"] {
+    for view in ["seeds", "sources"] {
         assert!(
             !exposes(view),
             "{view}.raw_code is NULL or empty for every row, which only reports false passes",
